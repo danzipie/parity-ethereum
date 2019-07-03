@@ -2188,13 +2188,18 @@ impl BlockChainClient for Client {
 		} else {
 			self.importer.miner.sensible_gas_price()
 		};
-		let transaction = transaction::Transaction {
+		let mut transaction = transaction::Transaction {
 			nonce: self.latest_nonce(&authoring_params.author),
 			action: Action::Call(address),
-			gas: self.importer.miner.sensible_gas_limit(),
+			gas: u64::max_value().into(),
 			gas_price,
 			value: U256::zero(),
 			data: data,
+		};
+		let signed_transaction = transaction.clone().fake_sign(authoring_params.author);
+		transaction.gas = match self.estimate_gas(&signed_transaction, &self.latest_state(), &self.best_block_header()) {
+			Ok(estimated_gas) => estimated_gas,
+			Err(_) => self.latest_env_info().gas_limit / 5,
 		};
 		let chain_id = self.engine.signing_chain_id(&self.latest_env_info());
 		let signature = self.engine.sign(transaction.hash(chain_id))
